@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -127,10 +128,37 @@ func newSpeciesHandlers() *speciesHandlers {
 	}
 }
 
+type adminPortal struct {
+	password string
+}
+
+func newAdminPortal() *adminPortal {
+	password := os.Getenv("ADMIN_PASSWORD")
+
+	if password == "" {
+		panic("required env var ADMIN_PASSWORD not set")
+	}
+
+	return &adminPortal{password: password}
+}
+
+func (a adminPortal) handler(w http.ResponseWriter, r *http.Request) {
+	user, pass, ok := r.BasicAuth()
+	if !ok || user != "admin" || pass != a.password {
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte("401 - unauthorized"))
+		return
+	}
+
+	w.Write([]byte("<html><h1>You've gained authorized access to the admin portal</h1></html>"))
+}
+
 func main() {
+	admin := newAdminPortal()
 	speciesHandlers := newSpeciesHandlers()
 	http.HandleFunc("/species", speciesHandlers.species)
 	http.HandleFunc("/species/", speciesHandlers.getSpecies)
+	http.HandleFunc("/admin", admin.handler)
 	err := http.ListenAndServe(":8080", nil)
 	if err != nil {
 		panic(err)
